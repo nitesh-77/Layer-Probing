@@ -18,7 +18,7 @@ This project provides tools to analyze and visualize:
 3. **Residual Stream Dynamics:** Measuring how the entropy and variance of activations evolve across layers as information flows through the network.
 
 
-## 📊 ## Key Findings & Results
+## 📊 Key Findings & Results
 
 ### 1. Early Information Convergence
 When probing `DeepSeek-R1-Distill-Qwen-7B` on GSM8K data, both KL Divergence (~1.6) and CE Loss (~2.4) drop sharply after layer 0 and stabilize by layer 1–2, showing the model aligns with its final output very early. Probe accuracy peaks at ~0.77 around layers 21–23, with a notable CE/KL spike at the final layer suggesting the last layer actively reshapes the representation.
