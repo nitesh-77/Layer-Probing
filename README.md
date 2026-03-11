@@ -1,78 +1,84 @@
 # Layer-Probing
 
-Trains linear probes across transformer layers to track how information evolves through the residual stream — tested on Qwen2 and DeepSeek-R1-Distill models using the GSM8K reasoning dataset. Includes tools for visualizing probe performance, comparing base vs R1-tuned model behavior, and extracting residual stream activations.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://spdx.org/licenses/MIT.html)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=flat&logo=PyTorch&logoColor=white)](https://pytorch.org/)
 
-## Models
-- `Qwen/Qwen2-7B-Instruct` — baseline
-- `deepseek-ai/DeepSeek-R1-Distill-Qwen-7B` — R1-tuned variant
+**Mechanistic Interpretability of Information Evolution in Large Language Models**
 
-## Dataset
-GSM8K — grade school math reasoning benchmark used for probe training and evaluation.
+Layer-Probing is a research project for analyzing the internal representations of Large Language Models (LLMs). By training MLP probes on the residual streams of transformer layers, this project tracks how predictive information about the next token emerges and stabilizes across layers — evaluated on mathematical reasoning tasks from the GSM8K benchmark.
 
-## Results
-**Probe Accuracy, CE Loss & KL Divergence by Layer**
-![r1 layer information analysis](results/r1_layer_information_analysis_with_kl.png)
+##  Why This Project Exists
 
-**Token Probability Distributions (Top 50)**
-![token logprobs distribution](results/token_logprobs_distribution.png)
+Traditional LLM evaluation relies heavily on final-layer outputs. **Layer-Probing** measures how well each layer's MLP probe matches the final layer's prediction (via accuracy and KL divergence), and how well it matches the ground truth token (via CE loss).
 
-> More plots (residual stream entropy — all tokens & last token) in the [`results/`](./results) folder.
+This project provides tools to analyze and visualize:
+1. **Information Bottlenecks:** Identifying at which layer a model's internal representations converge toward its final prediction, using MLP probes trained on residual stream activations.
+2. **Model Comparisons:** Comparing both the raw text outputs and the internal residual stream dynamics between a base instruction-tuned model (Qwen2) and a reasoning-distilled model (DeepSeek-R1).
+3. **Residual Stream Dynamics:** Measuring how the entropy and variance of activations evolve across layers as information flows through the network.
 
-## Installation
 
+## 📊 ## Key Findings & Results
+
+### 1. Early Information Convergence
+When probing `DeepSeek-R1-Distill-Qwen-7B` on GSM8K data, both KL Divergence (~1.6) and CE Loss (~2.4) drop sharply after layer 0 and stabilize by layer 1–2, showing the model aligns with its final output very early. Probe accuracy peaks at ~0.77 around layers 21–23, with a notable CE/KL spike at the final layer suggesting the last layer actively reshapes the representation.
+
+### 2. Residual Stream Entropy (Qwen2 vs. DeepSeek-R1)
+DeepSeek-R1 plateaus at a significantly higher entropy (~13) compared to Qwen2 (~10) across all middle layers. The contrast is sharpest in last-token dynamics — DeepSeek-R1 commits to a high-entropy representation by layer 12, while Qwen2 increases slowly and linearly throughout, never plateauing.
+
+### 3. Logprob Distributions
+For the prompt `"the dog the dog the dog..."`, DeepSeek-R1 is highly confident with a top-50 cumulative probability of **0.9736**, while Qwen2 is far more uncertain at **0.5303**, with probability spread across many candidate tokens.
+
+## Key Features
+- **Sequential Probe Training:** Trains individual MLP probes for every transformer layer using memory-optimized sequential processing to prevent Out-Of-Memory (OOM) errors.
+- **KL Divergence & CE Loss Metrics:** Measures how closely each layer's hidden state aligns with the final output distribution using KL divergence, and against ground truth using cross-entropy loss.
+- **Residual Stream Entropy Analysis:** Calculates layer-wise log entropy via the Frobenius norm of the covariance matrix, enabling comparison of information dynamics across models.
+- **GSM8K Integration:** Benchmarked on math reasoning tasks to track where next-token predictions converge across layers.
+
+## Getting Started
+
+### Prerequisites
+* Python 3.10+
+* CUDA-enabled GPU (Highly recommended for probe training)
+
+### Installation
 ```bash
-# Clone the repository
 git clone https://github.com/nitesh-77/Layer-Probing.git
-cd entropy_nanda
-
-# Create and activate a virtual environment
-python -m venv .venv
-source .venv/bin/activate 
-
-# Install dependencies
+cd Layer-Probing
 pip install -r requirements.txt
 ```
 
 ## Usage
 
-### Information Level Identifier
+### 1. Train Probes
+Train diagnostic MLP probes on the GSM8K dataset to measure when internal states begin to align with the final output:
 ```bash
-python information_level_identifier.py --model_name "Qwen/Qwen2-7B-Instruct" --batch_size 64 --learning_rate 5e-4 --num_epochs 1
+python information_level_identifier.py --model "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B" --batch-size 64 --gradient-accum 4 --logging-steps 100
+```
+> **Note:** Use `--max-layers N` to limit training to the first N layers if you run into memory issues.
+
+### 2. Compare Model Outputs
+Observe differences in generated completions between Qwen2 and DeepSeek-R1:
+```bash
+python model_comparison.py --prompt "If 3x + 5 = 20, what is x?" --max_tokens 200 --temperature 0.7
+```
+> **Note:** If `--prompt` is omitted, the script will ask for input interactively.
+
+### 3. Visualize Layer Alignment
+Generate plots for layer-wise accuracy, CE loss, and KL divergence:
+```bash
+python visualize_layers.py --probe-dir "./" --model "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B" --num-examples 1000
 ```
 
-### Visualize Layers
+### 4. Analyze Residual Stream Entropy
+Compare information complexity across model architectures:
 ```bash
-python visualize_layers.py --probe_dir "./layer-probe-checkpoints" --model_name "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B" --num_examples 100
+python residual_stream_viz.py
 ```
+> **Note:** The prompt and models are configured directly in `residual_stream_viz.py`. Edit the `main()` function to change them.
 
-### Model Comparison
-```bash
-python model_comparison.py --model1 "Qwen/Qwen2-7B-Instruct" --model2 "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
-```
 
-### Residual Stream Visualization
-```bash
-python residual_stream_viz.py --model_name "Qwen/Qwen2-7B-Instruct" --num_examples 50
-```
 
-## Files
+## License
 
-- `information_level_identifier.py`: Identifies information levels across layers using linear probes
-- `visualize_layers.py`: Visualizes layer-wise information and performance of probes
-- `residual_stream_viz.py`: Extracts and visualizes residual stream activations
-- `model_comparison.py`: Compares different model outputs based on the same prompt
-- `layer-probe-checkpoints/`: Trained probes for different layers
-- `qwen2-gsm8k-checkpoints/`: Model checkpoints for GSM8K tasks
-- `regular_probes/`: Standard linear probes without R1 tuning
-- `r1_probes/`: Probe weights for the R1 tuned model
-
-## Dataset
-
-The project uses the GSM8K dataset for training and evaluation.
-
-## Weights & Biases 
-
-For experiment tracking:
-```bash
-wandb login
-``` 
+MIT
